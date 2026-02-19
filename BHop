@@ -1,891 +1,892 @@
---by squirt--by squirt --by squirt--by squirt--by squirt
---by squirt--by squirt--by squirt--by squirt--by squirt
---by squirt--by squirt--by squirt--by squirt--by squirt
---by squirt--by squirt--by squirt --by squirt--by squirt
-local Player = game:GetService("Players").LocalPlayer
-local UIS = game:GetService("UserInputService")
---by squirt--by squirt --by squirt --by squirt --by squirt
-local Character
-local Humanoid
-local RootPart
---by squirt--by squirt --by squirt --by squirt --by squirt
-local Settings = {
-    Enabled = false,
-    BaseSpeed = 16,
-    CurrentSpeed = 16,
-    MaxSpeed = 1000,
-    SpeedIncrease = 50,
-    JumpPower = 50,
-    MinJumpPower = 0,
-    MaxJumpPower = 1000,
-    MinMaxSpeed = 1,
-    MaxMaxSpeed = 10000,
-    MinSpeedIncrease = 1,
-    MaxSpeedIncrease = 1000
-}
 --by squirt
-local Original = {
-    WalkSpeed = 16,
-    JumpPower = 50
-}
---by squirt--by squirt --by squirt --by squirt --by squirt --by squirt
-local lastJump = tick()
-local isOnGround = false
-local connection
-local screenGui
-local mainFrame
-local titleBar
-local titleText
-local collapseButton
-local contentFrame
-local button
-local speedBar
-local speedText
-local jumpHandle, jumpValueText
-local maxHandle, maxValueText
-local accelHandle, accelValueText
-local dragging = false
-local dragThreshold = 10
-local touchStartPos
-local sliderDragging = false
-local sliderStartPos
-local sliderStartValue
-local currentSlider = nil
-local menuCollapsed = false
---by squirt --by squirt --by squirt --by squirt --by squirt --by squirt --by squirt --by squirt
-local lastPosition
-local lastTime
-local realSpeed = 0
-local peakSpeed = 0
+local Player = game:GetService("Players").LocalPlayer --by squirt
+local UIS = game:GetService("UserInputService") --by squirt
 --by squirt
-local EXPANDED_HEIGHT = 210
-local COLLAPSED_HEIGHT = 30
-
--- ========== Функции BHop ==========
-
-local function updateCharacterReferences()
-    Character = Player.Character
-    if Character then
-        Humanoid = Character:FindFirstChildOfClass("Humanoid")
-        RootPart = Character:FindFirstChild("HumanoidRootPart")
-        if Humanoid and RootPart then
-            Original.WalkSpeed = Humanoid.WalkSpeed
-            Original.JumpPower = Humanoid.JumpPower
-            Settings.BaseSpeed = Original.WalkSpeed
-            Settings.CurrentSpeed = Settings.BaseSpeed
-            lastPosition = RootPart.Position
-            lastTime = tick()
-            peakSpeed = 0
-            return true
-        end
-    end
-    return false
-end
+local Character --by squirt
+local Humanoid --by squirt
+local RootPart --by squirt
 --by squirt
-if not updateCharacterReferences() then
-    Player.CharacterAdded:Connect(function(char)
-        Character = char
-        task.wait(0.5)
-        updateCharacterReferences()
-    end)
-end
-
-local function isOnGroundCheck()
-    if not RootPart then return false end
-    local rayOrigin = RootPart.Position
-    local rayDirection = Vector3.new(0, -4, 0)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {Character}
-    local result = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-    return result ~= nil
-end
+local Settings = { --by squirt
+    Enabled = false, --by squirt
+    BaseSpeed = 16, --by squirt
+    CurrentSpeed = 16, --by squirt
+    MaxSpeed = 1000, --by squirt
+    SpeedIncrease = 50, --by squirt
+    JumpPower = 50, --by squirt
+    MinJumpPower = 0, --by squirt
+    MaxJumpPower = 1000, --by squirt
+    MinMaxSpeed = 1, --by squirt
+    MaxMaxSpeed = 10000, --by squirt
+    MinSpeedIncrease = 1, --by squirt
+    MaxSpeedIncrease = 1000 --by squirt
+} --by squirt
 --by squirt
-local function performJump()
-    if not Settings.Enabled or tick() - lastJump < 0.1 then return end
-    if isOnGround and Humanoid then
-        pcall(function()
-            Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        end)
-        lastJump = tick()
-        Settings.CurrentSpeed = math.min(
-            Settings.CurrentSpeed + Settings.SpeedIncrease,
-            Settings.MaxSpeed
-        )
-        Humanoid.WalkSpeed = Settings.CurrentSpeed
-    end
-end
+local Original = { --by squirt
+    WalkSpeed = 16, --by squirt
+    JumpPower = 50 --by squirt
+} --by squirt
 --by squirt
-local function updateRealSpeed()
-    if not RootPart then return end
-    local currentTime = tick()
-    local deltaTime = currentTime - lastTime
-    if deltaTime > 0 then
-        local currentPos = RootPart.Position
-        local deltaPos = currentPos - lastPosition
-        local horizontalDelta = Vector3.new(deltaPos.X, 0, deltaPos.Z)
-        realSpeed = horizontalDelta.Magnitude / deltaTime
-        lastPosition = currentPos
-        lastTime = currentTime
-        if realSpeed > peakSpeed then
-            peakSpeed = realSpeed
-        end
-    end
-end
+local lastJump = tick() --by squirt
+local isOnGround = false --by squirt
+local connection --by squirt
+local screenGui --by squirt
+local mainFrame --by squirt
+local titleBar --by squirt
+local titleText --by squirt
+local collapseButton --by squirt
+local contentFrame --by squirt
+local button --by squirt
+local speedBar --by squirt
+local speedText --by squirt
+local jumpHandle, jumpValueText --by squirt
+local maxHandle, maxValueText --by squirt
+local accelHandle, accelValueText --by squirt
+local dragging = false --by squirt
+local dragThreshold = 10 --by squirt
+local touchStartPos --by squirt
+local sliderDragging = false --by squirt
+local sliderStartPos --by squirt
+local sliderStartValue --by squirt
+local currentSlider = nil --by squirt
+local menuCollapsed = false --by squirt
 --by squirt
-local function mainLoop()
-    if not Character or not Humanoid or Humanoid.Health <= 0 then
-        if Settings.Enabled then
-            Settings.Enabled = false
-            if button then
-                button.Text = "BHop OFF"
-                button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            end
-        end
-        return
-    end
-    
-    updateRealSpeed()
-    isOnGround = isOnGroundCheck()
-    
-    if Settings.Enabled then
-        performJump()
-    end
---by squirt    
-    if Settings.Enabled and not isOnGround then
-        Settings.CurrentSpeed = math.max(
-            Settings.CurrentSpeed - 0.5,
-            Settings.BaseSpeed
-        )
-        Humanoid.WalkSpeed = Settings.CurrentSpeed
-    end
+local lastPosition --by squirt
+local lastTime --by squirt
+local realSpeed = 0 --by squirt
+local peakSpeed = 0 --by squirt
 --by squirt
-    if speedBar then
-        local percent = (peakSpeed > 0) and math.min(realSpeed / peakSpeed, 1) or 0
-        speedBar.Size = UDim2.new(percent, 0, 1, 0)
-    end
-    if speedText then
-        speedText.Text = string.format("Speed: %.1f (peak: %.1f)", realSpeed, peakSpeed)
-    end
-end
+local EXPANDED_HEIGHT = 210 --by squirt
+local COLLAPSED_HEIGHT = 30 --by squirt
 --by squirt
-local function toggleBHop()
-    if not Humanoid then return end
-    Settings.Enabled = not Settings.Enabled
-    --by squirt
-    if Settings.Enabled then
-        print("[BHop] Включен")
-        Humanoid.JumpPower = Settings.JumpPower
-        Humanoid.WalkSpeed = Settings.CurrentSpeed
-        if button then
-            button.Text = "BHop ON"
-            button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        end
-        if not connection then
-            connection = game:GetService("RunService").Heartbeat:Connect(mainLoop)
-        end
-    else
-        print("[BHop] Выключен")
-        Humanoid.WalkSpeed = Original.WalkSpeed
-        Humanoid.JumpPower = Original.JumpPower
-        Settings.CurrentSpeed = Original.WalkSpeed
-        if button then
-            button.Text = "BHop OFF"
-            button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        end
-    end
-end
+-- ========== Функции BHop ========== --by squirt
 --by squirt
-local function setJumpPower(value)
-    if not Humanoid then return end
-    value = math.clamp(value, Settings.MinJumpPower, Settings.MaxJumpPower)
-    Settings.JumpPower = value
-    if Settings.Enabled then
-        Humanoid.JumpPower = value
+local function updateCharacterReferences() --by squirt
+    Character = Player.Character --by squirt
+    if Character then --by squirt
+        Humanoid = Character:FindFirstChildOfClass("Humanoid") --by squirt
+        RootPart = Character:FindFirstChild("HumanoidRootPart") --by squirt
+        if Humanoid and RootPart then --by squirt
+            Original.WalkSpeed = Humanoid.WalkSpeed --by squirt
+            Original.JumpPower = Humanoid.JumpPower --by squirt
+            Settings.BaseSpeed = Original.WalkSpeed --by squirt
+            Settings.CurrentSpeed = Settings.BaseSpeed --by squirt
+            lastPosition = RootPart.Position --by squirt
+            lastTime = tick() --by squirt
+            peakSpeed = 0 --by squirt
+            return true --by squirt
+        end --by squirt
     end --by squirt
-    if jumpValueText then
-        jumpValueText.Text = tostring(math.floor(value))
-    end
-    if jumpHandle then
-        local percent = (value - Settings.MinJumpPower) / (Settings.MaxJumpPower - Settings.MinJumpPower)
-        jumpHandle.Position = UDim2.new(percent, -7.5, 0, -5)
-    end
-end
+    return false --by squirt
+end --by squirt
 --by squirt
-local function setMaxSpeed(value)
-    value = math.clamp(value, Settings.MinMaxSpeed, Settings.MaxMaxSpeed)
-    Settings.MaxSpeed = value
-    if Settings.CurrentSpeed > value then
-        Settings.CurrentSpeed = value
-        if Settings.Enabled and Humanoid then
-            Humanoid.WalkSpeed = value
-        end
-    end
-    if maxValueText then
-        maxValueText.Text = tostring(math.floor(value))
-    end
-    if maxHandle then
-        local percent = (value - Settings.MinMaxSpeed) / (Settings.MaxMaxSpeed - Settings.MinMaxSpeed)
-        maxHandle.Position = UDim2.new(percent, -7.5, 0, -5)
-    end
-end
-
-local function setSpeedIncrease(value)
-    value = math.clamp(value, Settings.MinSpeedIncrease, Settings.MaxSpeedIncrease)
-    Settings.SpeedIncrease = value
-    if accelValueText then
-        accelValueText.Text = tostring(math.floor(value))
-    end
-    if accelHandle then
-        local percent = (value - Settings.MinSpeedIncrease) / (Settings.MaxSpeedIncrease - Settings.MinSpeedIncrease)
-        accelHandle.Position = UDim2.new(percent, -7.5, 0, -5)
-    end
-end
-
-local function toggleCollapse()
-    menuCollapsed = not menuCollapsed
-    if menuCollapsed then
-        mainFrame.Size = UDim2.new(0, 240, 0, COLLAPSED_HEIGHT)
-        contentFrame.Visible = false
-        collapseButton.Text = "▶"
-    else
-        mainFrame.Size = UDim2.new(0, 240, 0, EXPANDED_HEIGHT)
-        contentFrame.Visible = true
-        collapseButton.Text = "▼"
-    end
-end
-
--- ========== Создание главного меню BHop ==========
-
-local function createGUI()
-    if screenGui then
-        screenGui:Destroy()
-    end
-    
-    screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "SquirtMenu BHop"
-    screenGui.Parent = Player:WaitForChild("PlayerGui")
-    screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.DisplayOrder = 1000
-
-    mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 240, 0, EXPANDED_HEIGHT)
-    mainFrame.Position = UDim2.new(0, 20, 0.5, -105)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    mainFrame.BackgroundTransparency = 0.3
-    mainFrame.BorderSizePixel = 2
-    mainFrame.BorderColor3 = Color3.new(0, 0, 0)
-    mainFrame.Parent = screenGui
-    mainFrame.Active = true
-    mainFrame.Draggable = false
+if not updateCharacterReferences() then --by squirt
+    Player.CharacterAdded:Connect(function(char) --by squirt
+        Character = char --by squirt
+        task.wait(0.5) --by squirt
+        updateCharacterReferences() --by squirt
+    end) --by squirt
+end --by squirt
 --by squirt
-    titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
-    titleBar.Position = UDim2.new(0, 0, 0, 0)
-    titleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    titleBar.BackgroundTransparency = 0.2
-    titleBar.BorderSizePixel = 1
-    titleBar.BorderColor3 = Color3.new(0, 0, 0)
-    titleBar.Parent = mainFrame
-
-    titleText = Instance.new("TextLabel")
-    titleText.Size = UDim2.new(0, 150, 1, 0)
-    titleText.Position = UDim2.new(0, 5, 0, 0)
-    titleText.BackgroundTransparency = 1
-    titleText.Text = "SquirtMenu BHop"
-    titleText.TextColor3 = Color3.fromRGB(200, 255, 200)
-    titleText.Font = Enum.Font.GothamBold
-    titleText.TextSize = 14
-    titleText.TextXAlignment = Enum.TextXAlignment.Left
-    titleText.Parent = titleBar
-
-    collapseButton = Instance.new("TextButton")
-    collapseButton.Size = UDim2.new(0, 30, 1, 0)
-    collapseButton.Position = UDim2.new(1, -35, 0, 0)
-    collapseButton.BackgroundTransparency = 1
-    collapseButton.Text = "▼"
-    collapseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    collapseButton.Font = Enum.Font.GothamBold
-    collapseButton.TextSize = 18
-    collapseButton.Parent = titleBar
-    collapseButton.AutoButtonColor = false
-
-    contentFrame = Instance.new("Frame")
-    contentFrame.Size = UDim2.new(1, 0, 1, -30)
-    contentFrame.Position = UDim2.new(0, 0, 0, 30)
-    contentFrame.BackgroundTransparency = 1
-    contentFrame.Parent = mainFrame
-
-    button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -10, 0, 40)
-    button.Position = UDim2.new(0, 5, 0, 5)
-    button.Text = Settings.Enabled and "BHop ON" or "BHop OFF"
-    button.BackgroundColor3 = Settings.Enabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
-    button.TextColor3 = Color3.new(1, 1, 1)
-    button.Font = Enum.Font.GothamBold
-    button.TextSize = 18
-    button.BorderSizePixel = 1
-    button.BorderColor3 = Color3.new(0, 0, 0)
-    button.Parent = contentFrame
-    button.AutoButtonColor = false
-
-    local speedFrame = Instance.new("Frame")
-    speedFrame.Size = UDim2.new(1, -10, 0, 15)
-    speedFrame.Position = UDim2.new(0, 5, 0, 50)
-    speedFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    speedFrame.BorderSizePixel = 1
-    speedFrame.Parent = contentFrame
-
-    speedBar = Instance.new("Frame")
-    speedBar.Size = UDim2.new(0, 0, 1, 0)
-    speedBar.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
-    speedBar.BorderSizePixel = 0
-    speedBar.Parent = speedFrame
-
-    speedText = Instance.new("TextLabel")
-    speedText.Size = UDim2.new(1, -10, 0, 15)
-    speedText.Position = UDim2.new(0, 5, 0, 70)
-    speedText.BackgroundTransparency = 1
-    speedText.Text = "Speed: 0.0"
-    speedText.TextColor3 = Color3.new(1, 1, 1)
-    speedText.Font = Enum.Font.Gotham
-    speedText.TextSize = 12
-    speedText.TextXAlignment = Enum.TextXAlignment.Left
-    speedText.Parent = contentFrame
-
-    -- Jump
-    local jumpLabel = Instance.new("TextLabel")
-    jumpLabel.Size = UDim2.new(0, 50, 0, 15)
-    jumpLabel.Position = UDim2.new(0, 5, 0, 95)
-    jumpLabel.BackgroundTransparency = 1
-    jumpLabel.Text = "Jump"
-    jumpLabel.TextColor3 = Color3.new(1, 1, 1)
-    jumpLabel.Font = Enum.Font.Gotham
-    jumpLabel.TextSize = 12
-    jumpLabel.TextXAlignment = Enum.TextXAlignment.Left
-    jumpLabel.Parent = contentFrame
-
-    jumpValueText = Instance.new("TextLabel")
-    jumpValueText.Size = UDim2.new(0, 50, 0, 15)
-    jumpValueText.Position = UDim2.new(1, -55, 0, 95)
-    jumpValueText.BackgroundTransparency = 1
-    jumpValueText.Text = tostring(math.floor(Settings.JumpPower))
-    jumpValueText.TextColor3 = Color3.new(1, 1, 1)
-    jumpValueText.Font = Enum.Font.Gotham
-    jumpValueText.TextSize = 12
-    jumpValueText.TextXAlignment = Enum.TextXAlignment.Right
-    jumpValueText.Parent = contentFrame
-
-    local jumpSliderBg = Instance.new("Frame")
-    jumpSliderBg.Size = UDim2.new(1, -20, 0, 5)
-    jumpSliderBg.Position = UDim2.new(0, 10, 0, 115)
-    jumpSliderBg.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    jumpSliderBg.BorderSizePixel = 0
-    jumpSliderBg.Parent = contentFrame
-
-    jumpHandle = Instance.new("TextButton")
-    jumpHandle.Size = UDim2.new(0, 15, 0, 15)
-    jumpHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    jumpHandle.Text = ""
-    jumpHandle.BorderSizePixel = 1
-    jumpHandle.BorderColor3 = Color3.new(0, 0, 0)
-    jumpHandle.Parent = jumpSliderBg
-    jumpHandle.AutoButtonColor = false
-
-    -- Max speed
-    local maxLabel = Instance.new("TextLabel")
-    maxLabel.Size = UDim2.new(0, 50, 0, 15)
-    maxLabel.Position = UDim2.new(0, 5, 0, 130)
-    maxLabel.BackgroundTransparency = 1
-    maxLabel.Text = "Max speed"
-    maxLabel.TextColor3 = Color3.new(1, 1, 1)
-    maxLabel.Font = Enum.Font.Gotham
-    maxLabel.TextSize = 12
-    maxLabel.TextXAlignment = Enum.TextXAlignment.Left
-    maxLabel.Parent = contentFrame
+local function isOnGroundCheck() --by squirt
+    if not RootPart then return false end --by squirt
+    local rayOrigin = RootPart.Position --by squirt
+    local rayDirection = Vector3.new(0, -4, 0) --by squirt
+    local raycastParams = RaycastParams.new() --by squirt
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist --by squirt
+    raycastParams.FilterDescendantsInstances = {Character} --by squirt
+    local result = workspace:Raycast(rayOrigin, rayDirection, raycastParams) --by squirt
+    return result ~= nil --by squirt
+end --by squirt
 --by squirt
-    maxValueText = Instance.new("TextLabel")
-    maxValueText.Size = UDim2.new(0, 50, 0, 15)
-    maxValueText.Position = UDim2.new(1, -55, 0, 130)
-    maxValueText.BackgroundTransparency = 1
-    maxValueText.Text = tostring(math.floor(Settings.MaxSpeed))
-    maxValueText.TextColor3 = Color3.new(1, 1, 1)
-    maxValueText.Font = Enum.Font.Gotham
-    maxValueText.TextSize = 12
-    maxValueText.TextXAlignment = Enum.TextXAlignment.Right
-    maxValueText.Parent = contentFrame
-
-    local maxSliderBg = Instance.new("Frame")
-    maxSliderBg.Size = UDim2.new(1, -20, 0, 5)
-    maxSliderBg.Position = UDim2.new(0, 10, 0, 150)
-    maxSliderBg.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    maxSliderBg.BorderSizePixel = 0
-    maxSliderBg.Parent = contentFrame
-
-    maxHandle = Instance.new("TextButton")
-    maxHandle.Size = UDim2.new(0, 15, 0, 15)
-    maxHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    maxHandle.Text = ""
-    maxHandle.BorderSizePixel = 1
-    maxHandle.BorderColor3 = Color3.new(0, 0, 0)
-    maxHandle.Parent = maxSliderBg
-    maxHandle.AutoButtonColor = false
+local function performJump() --by squirt
+    if not Settings.Enabled or tick() - lastJump < 0.1 then return end --by squirt
+    if isOnGround and Humanoid then --by squirt
+        pcall(function() --by squirt
+            Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) --by squirt
+        end) --by squirt
+        lastJump = tick() --by squirt
+        Settings.CurrentSpeed = math.min( --by squirt
+            Settings.CurrentSpeed + Settings.SpeedIncrease, --by squirt
+            Settings.MaxSpeed --by squirt
+        ) --by squirt
+        Humanoid.WalkSpeed = Settings.CurrentSpeed --by squirt
+    end --by squirt
+end --by squirt
 --by squirt
-    -- Boost
-    local accelLabel = Instance.new("TextLabel")
-    accelLabel.Size = UDim2.new(0, 50, 0, 15)
-    accelLabel.Position = UDim2.new(0, 5, 0, 165)
-    accelLabel.BackgroundTransparency = 1
-    accelLabel.Text = "boost"
-    accelLabel.TextColor3 = Color3.new(1, 1, 1)
-    accelLabel.Font = Enum.Font.Gotham
-    accelLabel.TextSize = 12
-    accelLabel.TextXAlignment = Enum.TextXAlignment.Left
-    accelLabel.Parent = contentFrame
-
-    accelValueText = Instance.new("TextLabel")
-    accelValueText.Size = UDim2.new(0, 50, 0, 15)
-    accelValueText.Position = UDim2.new(1, -55, 0, 165)
-    accelValueText.BackgroundTransparency = 1
-    accelValueText.Text = tostring(math.floor(Settings.SpeedIncrease))
-    accelValueText.TextColor3 = Color3.new(1, 1, 1)
-    accelValueText.Font = Enum.Font.Gotham
-    accelValueText.TextSize = 12
-    accelValueText.TextXAlignment = Enum.TextXAlignment.Right
-    accelValueText.Parent = contentFrame
-
-    local accelSliderBg = Instance.new("Frame")
-    accelSliderBg.Size = UDim2.new(1, -20, 0, 5)
-    accelSliderBg.Position = UDim2.new(0, 10, 0, 185)
-    accelSliderBg.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    accelSliderBg.BorderSizePixel = 0
-    accelSliderBg.Parent = contentFrame
-
-    accelHandle = Instance.new("TextButton")
-    accelHandle.Size = UDim2.new(0, 15, 0, 15)
-    accelHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    accelHandle.Text = ""
-    accelHandle.BorderSizePixel = 1
-    accelHandle.BorderColor3 = Color3.new(0, 0, 0)
-    accelHandle.Parent = accelSliderBg
-    accelHandle.AutoButtonColor = false
-
-    setJumpPower(Settings.JumpPower)
-    setMaxSpeed(Settings.MaxSpeed)
-    setSpeedIncrease(Settings.SpeedIncrease)
-
-    -- Drag title bar
-    local frameDragging = false
-    local frameDragStart
-    local frameStartPos
-
-    titleBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            frameDragging = true
-            frameDragStart = Vector2.new(input.Position.X, input.Position.Y)
-            frameStartPos = mainFrame.Position
-        end
-    end)
-
-    titleBar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            frameDragging = false
-        end
-    end)
-
-    UIS.InputChanged:Connect(function(input, gameProcessed)
-        if frameDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = Vector2.new(input.Position.X, input.Position.Y) - frameDragStart
-            mainFrame.Position = UDim2.new(
-                frameStartPos.X.Scale,
-                frameStartPos.X.Offset + delta.X,
-                frameStartPos.Y.Scale,
-                frameStartPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    collapseButton.MouseButton1Click:Connect(toggleCollapse)
-
-    -- BHop button click
-    button.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            touchStartPos = Vector2.new(input.Position.X, input.Position.Y)
-            dragging = false
-        end
-    end)
-
-    button.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            if touchStartPos and not dragging then
-                local delta = Vector2.new(input.Position.X, input.Position.Y) - touchStartPos
-                if delta.Magnitude >= dragThreshold then
-                    dragging = true
-                end
-            end
-        end
-    end)
-
-    button.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if not dragging then
-                toggleBHop()
-            end
-            touchStartPos = nil
-            dragging = false
-        end
-    end)
-
-    -- Sliders
-    local function startSlider(input, sliderType, startVal)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            sliderDragging = true
-            currentSlider = sliderType
-            sliderStartPos = Vector2.new(input.Position.X, input.Position.Y)
-            sliderStartValue = startVal
-        end
-    end
-
-    jumpHandle.InputBegan:Connect(function(input)
-        startSlider(input, "jump", Settings.JumpPower)
-    end)
-    jumpHandle.InputEnded:Connect(function()
-        sliderDragging = false
-        currentSlider = nil
-    end)
-
-    maxHandle.InputBegan:Connect(function(input)
-        startSlider(input, "max speed", Settings.MaxSpeed)
-    end)
-    maxHandle.InputEnded:Connect(function()
-        sliderDragging = false
-        currentSlider = nil
-    end)
-
-    accelHandle.InputBegan:Connect(function(input)
-        startSlider(input, "boost", Settings.SpeedIncrease)
-    end)
-    accelHandle.InputEnded:Connect(function()
-        sliderDragging = false
-        currentSlider = nil
-    end)
-
-    UIS.InputChanged:Connect(function(input)
-        if sliderDragging and currentSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = Vector2.new(input.Position.X, input.Position.Y) - sliderStartPos
-            local sliderBg
-            local minVal, maxVal
-            if currentSlider == "jump" then
-                sliderBg = jumpSliderBg
-                minVal = Settings.MinJumpPower
-                maxVal = Settings.MaxJumpPower
-            elseif currentSlider == "max speed" then
-                sliderBg = maxSliderBg
-                minVal = Settings.MinMaxSpeed
-                maxVal = Settings.MaxMaxSpeed
-            else
-                sliderBg = accelSliderBg
-                minVal = Settings.MinSpeedIncrease
-                maxVal = Settings.MaxSpeedIncrease
-            end
-            local sliderWidth = sliderBg.AbsoluteSize.X
-            if sliderWidth > 0 then
-                local percent = (sliderStartValue - minVal) / (maxVal - minVal) + delta.X / sliderWidth
-                percent = math.clamp(percent, 0, 1)
-                local newValue = minVal + percent * (maxVal - minVal)
-                if currentSlider == "jump" then
-                    setJumpPower(newValue)
-                elseif currentSlider == "max speed" then
-                    setMaxSpeed(newValue)
-                else
-                    setSpeedIncrease(newValue)
-                end
-            end
-        end
-    end)
-
-    print("GUI BHop создан")
-end
+local function updateRealSpeed() --by squirt
+    if not RootPart then return end --by squirt
+    local currentTime = tick() --by squirt
+    local deltaTime = currentTime - lastTime --by squirt
+    if deltaTime > 0 then --by squirt
+        local currentPos = RootPart.Position --by squirt
+        local deltaPos = currentPos - lastPosition --by squirt
+        local horizontalDelta = Vector3.new(deltaPos.X, 0, deltaPos.Z) --by squirt
+        realSpeed = horizontalDelta.Magnitude / deltaTime --by squirt
+        lastPosition = currentPos --by squirt
+        lastTime = currentTime --by squirt
+        if realSpeed > peakSpeed then --by squirt
+            peakSpeed = realSpeed --by squirt
+        end --by squirt
+    end --by squirt
+end --by squirt
 --by squirt
--- ========== Shiftlock (отдельная кнопка) ==========
-
-local function createShiftlockButton()
-    -- Создаём ScreenGui для шифт-лока (в PlayerGui, чтобы работало везде)
-    local ShiftlockGui = Instance.new("ScreenGui")
-    ShiftlockGui.Name = "ShiftlockButton"
-    ShiftlockGui.Parent = Player:WaitForChild("PlayerGui")
-    ShiftlockGui.ResetOnSpawn = false
-    ShiftlockGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ShiftlockGui.DisplayOrder = 2000  -- выше чем меню BHop
-
-    -- Кнопка
-    local ImageButton = Instance.new("ImageButton")
-    ImageButton.Name = "ShiftlockIcon"
-    ImageButton.Parent = ShiftlockGui
-    ImageButton.Active = true
-    ImageButton.Draggable = true  -- можно перетаскивать
-    ImageButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    ImageButton.BackgroundTransparency = 1.000
-    ImageButton.Position = UDim2.new(0.92, 0, 0.55, 0)   -- справа, по центру
-    ImageButton.Size = UDim2.new(0, 60, 0, 60)          -- размер можно подогнать
-    ImageButton.SizeConstraint = Enum.SizeConstraint.RelativeXX
-    ImageButton.Image = "http://www.roblox.com/asset/?id=182223762"  -- иконка замка
-
-    -- ========== Логика шифт-лока (первый скрипт) ==========
-    local MobileCameraFramework = {}
-    local players = game:GetService("Players")
-    local runservice = game:GetService("RunService")
-    local CAS = game:GetService("ContextActionService")
-    local player = players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    local root = character:WaitForChild("HumanoidRootPart")
-    local humanoid = character.Humanoid
-    local camera = workspace.CurrentCamera
-    local button = ImageButton
-
-    -- Видимость только на мобилках (можно убрать, если нужно)
-    local uis = game:GetService("UserInputService")
-    local ismobile = uis.TouchEnabled
-    button.Visible = ismobile
-
-    local states = {
-        OFF = "rbxasset://textures/ui/mouseLock_off@2x.png",
-        ON = "rbxasset://textures/ui/mouseLock_on@2x.png"
-    }
-    local MAX_LENGTH = 900000
-    local active = false
-    local ENABLED_OFFSET = CFrame.new(1.7, 0, 0)
-    local DISABLED_OFFSET = CFrame.new(-1.7, 0, 0)
-    local rootPos = Vector3.new(0,0,0)
-
-    local function UpdatePos()
-        if player.Character and player.Character:FindFirstChildOfClass"Humanoid" and player.Character:FindFirstChildOfClass"Humanoid".RootPart then
-            rootPos = player.Character:FindFirstChildOfClass"Humanoid".RootPart.Position
-        end
-    end
-
-    local function UpdateImage(STATE)
-        button.Image = states[STATE]
-    end
-
-    local function UpdateAutoRotate(BOOL)
-        if player.Character and player.Character:FindFirstChildOfClass"Humanoid" then
-            player.Character:FindFirstChildOfClass"Humanoid".AutoRotate = BOOL
-        end
-    end
-
-    local function GetUpdatedCameraCFrame()
-        if workspace.CurrentCamera then
-            return CFrame.new(rootPos, Vector3.new(workspace.CurrentCamera.CFrame.LookVector.X * MAX_LENGTH, rootPos.Y, workspace.CurrentCamera.CFrame.LookVector.Z * MAX_LENGTH))
-        end
-    end
-
-    local function EnableShiftlock()
-        UpdatePos()
-        UpdateAutoRotate(false)
-        UpdateImage("ON")
-        if player.Character and player.Character:FindFirstChildOfClass"Humanoid" and player.Character:FindFirstChildOfClass"Humanoid".RootPart then
-            player.Character:FindFirstChildOfClass"Humanoid".RootPart.CFrame = GetUpdatedCameraCFrame()
-        end
-        if workspace.CurrentCamera then
-            workspace.CurrentCamera.CFrame = camera.CFrame * ENABLED_OFFSET
-        end
-    end
-
-    local function DisableShiftlock()
-        UpdatePos()
-        UpdateAutoRotate(true)
-        UpdateImage("OFF")
-        if workspace.CurrentCamera then
-            workspace.CurrentCamera.CFrame = camera.CFrame * DISABLED_OFFSET
-        end
-        pcall(function()
-            if active then
-                active:Disconnect()
-                active = nil
-            end
-        end)
-    end
+local function mainLoop() --by squirt
+    if not Character or not Humanoid or Humanoid.Health <= 0 then --by squirt
+        if Settings.Enabled then --by squirt
+            Settings.Enabled = false --by squirt
+            if button then --by squirt
+                button.Text = "BHop OFF" --by squirt
+                button.BackgroundColor3 = Color3.fromRGB(255, 0, 0) --by squirt
+            end --by squirt
+        end --by squirt
+        return --by squirt
+    end --by squirt
+    --by squirt
+    updateRealSpeed() --by squirt
+    isOnGround = isOnGroundCheck() --by squirt
+    --by squirt
+    if Settings.Enabled then --by squirt
+        performJump() --by squirt
+    end --by squirt
+    --by squirt
+    if Settings.Enabled and not isOnGround then --by squirt
+        Settings.CurrentSpeed = math.max( --by squirt
+            Settings.CurrentSpeed - 0.5, --by squirt
+            Settings.BaseSpeed --by squirt
+        ) --by squirt
+        Humanoid.WalkSpeed = Settings.CurrentSpeed --by squirt
+    end --by squirt
 --by squirt
-    UpdateImage("OFF")
-    active = false
-
-    function ShiftLock()
-        if not active then
-            active = runservice.RenderStepped:Connect(function()
-                EnableShiftlock()
-            end)
-        else
-            DisableShiftlock()
-        end
-    end
-
-    -- Привязка к кнопке
-    button.MouseButton1Click:Connect(ShiftLock)
-
-    -- ========== Второй скрипт (контроллер) ==========
-    -- (Адаптирован, чтобы не конфликтовать)
-    local Players = game:GetService("Players")
-    local UserInputService = game:GetService("UserInputService")
-    local Settings = UserSettings()
-    local GameSettings = Settings.GameSettings
-    local ShiftLockController = {}
-
-    while not Players.LocalPlayer do wait() end
-    local LocalPlayer = Players.LocalPlayer
-    local Mouse = LocalPlayer:GetMouse()
-    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-    local IsShiftLockMode = true
-    local IsShiftLocked = true
-    local IsActionBound = false
-    local IsInFirstPerson = false
+    if speedBar then --by squirt
+        local percent = (peakSpeed > 0) and math.min(realSpeed / peakSpeed, 1) or 0 --by squirt
+        speedBar.Size = UDim2.new(percent, 0, 1, 0) --by squirt
+    end --by squirt
+    if speedText then --by squirt
+        speedText.Text = string.format("Speed: %.1f (peak: %.1f)", realSpeed, peakSpeed) --by squirt
+    end --by squirt
+end --by squirt
 --by squirt
-    ShiftLockController.OnShiftLockToggled = Instance.new("BindableEvent")
-
-    local function isShiftLockMode()
-        return LocalPlayer.DevEnableMouseLock and GameSettings.ControlMode == Enum.ControlMode.MouseLockSwitch and LocalPlayer.DevComputerMovementMode ~= Enum.DevComputerMovementMode.ClickToMove and GameSettings.ComputerMovementMode ~= Enum.ComputerMovementMode.ClickToMove and LocalPlayer.DevComputerMovementMode ~= Enum.DevComputerMovementMode.Scriptable
-    end
-
-    if not UserInputService.TouchEnabled then
-        IsShiftLockMode = isShiftLockMode()
-    end
-
-    local function onShiftLockToggled()
-        IsShiftLocked = not IsShiftLocked
-        ShiftLockController.OnShiftLockToggled:Fire()
-    end
-
-    local initialize = function()
-        print("Shiftlock enabled")
-    end
-
-    function ShiftLockController:IsShiftLocked()
-        return IsShiftLockMode and IsShiftLocked
-    end
-
-    function ShiftLockController:SetIsInFirstPerson(isInFirstPerson)
-        IsInFirstPerson = isInFirstPerson
-    end
-
-    local function mouseLockSwitchFunc(actionName, inputState, inputObject)
-        if IsShiftLockMode then
-            onShiftLockToggled()
-        end
-    end
-
-    local function disableShiftLock()
-        IsShiftLockMode = false
-        Mouse.Icon = ""
-        if InputCn then
-            InputCn:Disconnect()
-            InputCn = nil
-        end
-        IsActionBound = false
-        ShiftLockController.OnShiftLockToggled:Fire()
-    end
-
-    local onShiftInputBegan = function(inputObject, isProcessed)
-        if isProcessed then return end
-        if inputObject.UserInputType ~= Enum.UserInputType.Keyboard or inputObject.KeyCode == Enum.KeyCode.LeftShift or inputObject.KeyCode == Enum.KeyCode.RightShift then
-            -- Ничего, можно добавить обработку клавиш, если нужно
-        end
-    end
-
-    local function enableShiftLock()
-        IsShiftLockMode = isShiftLockMode()
-        if IsShiftLockMode then
-            if IsShiftLocked then
-                ShiftLockController.OnShiftLockToggled:Fire()
-            end
-            if not IsActionBound then
-                InputCn = UserInputService.InputBegan:Connect(onShiftInputBegan)
-                IsActionBound = true
-            end
-        end
-    end
+local function toggleBHop() --by squirt
+    if not Humanoid then return end --by squirt
+    Settings.Enabled = not Settings.Enabled --by squirt
+    --by squirt
+    if Settings.Enabled then --by squirt
+        print("[BHop] Включен") --by squirt
+        Humanoid.JumpPower = Settings.JumpPower --by squirt
+        Humanoid.WalkSpeed = Settings.CurrentSpeed --by squirt
+        if button then --by squirt
+            button.Text = "BHop ON" --by squirt
+            button.BackgroundColor3 = Color3.fromRGB(0, 255, 0) --by squirt
+        end --by squirt
+        if not connection then --by squirt
+            connection = game:GetService("RunService").Heartbeat:Connect(mainLoop) --by squirt
+        end --by squirt
+    else --by squirt
+        print("[BHop] Выключен") --by squirt
+        Humanoid.WalkSpeed = Original.WalkSpeed --by squirt
+        Humanoid.JumpPower = Original.JumpPower --by squirt
+        Settings.CurrentSpeed = Original.WalkSpeed --by squirt
+        if button then --by squirt
+            button.Text = "BHop OFF" --by squirt
+            button.BackgroundColor3 = Color3.fromRGB(255, 0, 0) --by squirt
+        end --by squirt
+    end --by squirt
+end --by squirt
 --by squirt
-    GameSettings.Changed:Connect(function(property)
-        if property == "ControlMode" then
-            if GameSettings.ControlMode == Enum.ControlMode.MouseLockSwitch then
-                enableShiftLock()
-            else
-                disableShiftLock()
-            end
-        elseif property == "ComputerMovementMode" then
-            if GameSettings.ComputerMovementMode == Enum.ComputerMovementMode.ClickToMove then
-                disableShiftLock()
-            else
-                enableShiftLock()
-            end
-        end
-    end)
-
-    LocalPlayer.Changed:Connect(function(property)
-        if property == "DevEnableMouseLock" then
-            if LocalPlayer.DevEnableMouseLock then
-                enableShiftLock()
-            else
-                disableShiftLock()
-            end
-        elseif property == "DevComputerMovementMode" then
-            if LocalPlayer.DevComputerMovementMode == Enum.DevComputerMovementMode.ClickToMove or LocalPlayer.DevComputerMovementMode == Enum.DevComputerMovementMode.Scriptable then
-                disableShiftLock()
-            else
-                enableShiftLock()
-            end
-        end
-    end)
-
-    LocalPlayer.CharacterAdded:Connect(function(character)
-        if not UserInputService.TouchEnabled then
-            initialize()
-        end
-    end)
-
-    if not UserInputService.TouchEnabled then
-        initialize()
-        if isShiftLockMode() then
-            InputCn = UserInputService.InputBegan:Connect(onShiftInputBegan)
-            IsActionBound = true
-        end
-    end
-
-    enableShiftLock()
-
-    print("Shiftlock button created")
-end
-
--- ========== Обработка респавна ==========
-
-local function onCharacterAdded(newChar)
-    Character = newChar
-    task.wait(0.5)
-    if updateCharacterReferences() then
-        if Settings.Enabled then
-            Settings.Enabled = false
-        end
-        if button then
-            button.Text = "BHop OFF"
-            button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        end
-        Humanoid.WalkSpeed = Original.WalkSpeed
-        Humanoid.JumpPower = Original.JumpPower
-        Settings.CurrentSpeed = Original.WalkSpeed
-        lastPosition = RootPart.Position
-        lastTime = tick()
-        peakSpeed = 0
-        print("Персонаж возродился, BHop сброшен")
-    end
-end
-
-Player.CharacterAdded:Connect(onCharacterAdded)
-
--- ========== Запуск ==========
+local function setJumpPower(value) --by squirt
+    if not Humanoid then return end --by squirt
+    value = math.clamp(value, Settings.MinJumpPower, Settings.MaxJumpPower) --by squirt
+    Settings.JumpPower = value --by squirt
+    if Settings.Enabled then --by squirt
+        Humanoid.JumpPower = value --by squirt
+    end --by squirt
+    if jumpValueText then --by squirt
+        jumpValueText.Text = tostring(math.floor(value)) --by squirt
+    end --by squirt
+    if jumpHandle then --by squirt
+        local percent = (value - Settings.MinJumpPower) / (Settings.MaxJumpPower - Settings.MinJumpPower) --by squirt
+        jumpHandle.Position = UDim2.new(percent, -7.5, 0, -5) --by squirt
+    end --by squirt
+end --by squirt
 --by squirt
-createGUI()
-createShiftlockButton()  -- добавляем кнопку шифт-лока
-
-connection = game:GetService("RunService").Heartbeat:Connect(mainLoop)
+local function setMaxSpeed(value) --by squirt
+    value = math.clamp(value, Settings.MinMaxSpeed, Settings.MaxMaxSpeed) --by squirt
+    Settings.MaxSpeed = value --by squirt
+    if Settings.CurrentSpeed > value then --by squirt
+        Settings.CurrentSpeed = value --by squirt
+        if Settings.Enabled and Humanoid then --by squirt
+            Humanoid.WalkSpeed = value --by squirt
+        end --by squirt
+    end --by squirt
+    if maxValueText then --by squirt
+        maxValueText.Text = tostring(math.floor(value)) --by squirt
+    end --by squirt
+    if maxHandle then --by squirt
+        local percent = (value - Settings.MinMaxSpeed) / (Settings.MaxMaxSpeed - Settings.MinMaxSpeed) --by squirt
+        maxHandle.Position = UDim2.new(percent, -7.5, 0, -5) --by squirt
+    end --by squirt
+end --by squirt
 --by squirt
-print("Скрипт загружен. Меню BHop слева, кнопка Shiftlock справа (видна на мобилках).")
+local function setSpeedIncrease(value) --by squirt
+    value = math.clamp(value, Settings.MinSpeedIncrease, Settings.MaxSpeedIncrease) --by squirt
+    Settings.SpeedIncrease = value --by squirt
+    if accelValueText then --by squirt
+        accelValueText.Text = tostring(math.floor(value)) --by squirt
+    end --by squirt
+    if accelHandle then --by squirt
+        local percent = (value - Settings.MinSpeedIncrease) / (Settings.MaxSpeedIncrease - Settings.MinSpeedIncrease) --by squirt
+        accelHandle.Position = UDim2.new(percent, -7.5, 0, -5) --by squirt
+    end --by squirt
+end --by squirt
+--by squirt
+local function toggleCollapse() --by squirt
+    menuCollapsed = not menuCollapsed --by squirt
+    if menuCollapsed then --by squirt
+        mainFrame.Size = UDim2.new(0, 240, 0, COLLAPSED_HEIGHT) --by squirt
+        contentFrame.Visible = false --by squirt
+        collapseButton.Text = "▶" --by squirt
+    else --by squirt
+        mainFrame.Size = UDim2.new(0, 240, 0, EXPANDED_HEIGHT) --by squirt
+        contentFrame.Visible = true --by squirt
+        collapseButton.Text = "▼" --by squirt
+    end --by squirt
+end --by squirt
+--by squirt
+-- ========== Создание главного меню BHop ========== --by squirt
+--by squirt
+local function createGUI() --by squirt
+    if screenGui then --by squirt
+        screenGui:Destroy() --by squirt
+    end --by squirt
+    --by squirt
+    screenGui = Instance.new("ScreenGui") --by squirt
+    screenGui.Name = "SquirtMenu BHop" --by squirt
+    screenGui.Parent = Player:WaitForChild("PlayerGui") --by squirt
+    screenGui.ResetOnSpawn = false --by squirt
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling --by squirt
+    screenGui.DisplayOrder = 1000 --by squirt
+--by squirt
+    mainFrame = Instance.new("Frame") --by squirt
+    mainFrame.Size = UDim2.new(0, 240, 0, EXPANDED_HEIGHT) --by squirt
+    mainFrame.Position = UDim2.new(0, 20, 0.5, -105) --by squirt
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30) --by squirt
+    mainFrame.BackgroundTransparency = 0.3 --by squirt
+    mainFrame.BorderSizePixel = 2 --by squirt
+    mainFrame.BorderColor3 = Color3.new(0, 0, 0) --by squirt
+    mainFrame.Parent = screenGui --by squirt
+    mainFrame.Active = true --by squirt
+    mainFrame.Draggable = false --by squirt
+--by squirt
+    titleBar = Instance.new("Frame") --by squirt
+    titleBar.Size = UDim2.new(1, 0, 0, 30) --by squirt
+    titleBar.Position = UDim2.new(0, 0, 0, 0) --by squirt
+    titleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50) --by squirt
+    titleBar.BackgroundTransparency = 0.2 --by squirt
+    titleBar.BorderSizePixel = 1 --by squirt
+    titleBar.BorderColor3 = Color3.new(0, 0, 0) --by squirt
+    titleBar.Parent = mainFrame --by squirt
+--by squirt
+    titleText = Instance.new("TextLabel") --by squirt
+    titleText.Size = UDim2.new(0, 150, 1, 0) --by squirt
+    titleText.Position = UDim2.new(0, 5, 0, 0) --by squirt
+    titleText.BackgroundTransparency = 1 --by squirt
+    titleText.Text = "SquirtMenu BHop" --by squirt
+    titleText.TextColor3 = Color3.fromRGB(200, 255, 200) --by squirt
+    titleText.Font = Enum.Font.GothamBold --by squirt
+    titleText.TextSize = 14 --by squirt
+    titleText.TextXAlignment = Enum.TextXAlignment.Left --by squirt
+    titleText.Parent = titleBar --by squirt
+--by squirt
+    collapseButton = Instance.new("TextButton") --by squirt
+    collapseButton.Size = UDim2.new(0, 30, 1, 0) --by squirt
+    collapseButton.Position = UDim2.new(1, -35, 0, 0) --by squirt
+    collapseButton.BackgroundTransparency = 1 --by squirt
+    collapseButton.Text = "▼" --by squirt
+    collapseButton.TextColor3 = Color3.fromRGB(255, 255, 255) --by squirt
+    collapseButton.Font = Enum.Font.GothamBold --by squirt
+    collapseButton.TextSize = 18 --by squirt
+    collapseButton.Parent = titleBar --by squirt
+    collapseButton.AutoButtonColor = false --by squirt
+--by squirt
+    contentFrame = Instance.new("Frame") --by squirt
+    contentFrame.Size = UDim2.new(1, 0, 1, -30) --by squirt
+    contentFrame.Position = UDim2.new(0, 0, 0, 30) --by squirt
+    contentFrame.BackgroundTransparency = 1 --by squirt
+    contentFrame.Parent = mainFrame --by squirt
+--by squirt
+    button = Instance.new("TextButton") --by squirt
+    button.Size = UDim2.new(1, -10, 0, 40) --by squirt
+    button.Position = UDim2.new(0, 5, 0, 5) --by squirt
+    button.Text = Settings.Enabled and "BHop ON" or "BHop OFF" --by squirt
+    button.BackgroundColor3 = Settings.Enabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0) --by squirt
+    button.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    button.Font = Enum.Font.GothamBold --by squirt
+    button.TextSize = 18 --by squirt
+    button.BorderSizePixel = 1 --by squirt
+    button.BorderColor3 = Color3.new(0, 0, 0) --by squirt
+    button.Parent = contentFrame --by squirt
+    button.AutoButtonColor = false --by squirt
+--by squirt
+    local speedFrame = Instance.new("Frame") --by squirt
+    speedFrame.Size = UDim2.new(1, -10, 0, 15) --by squirt
+    speedFrame.Position = UDim2.new(0, 5, 0, 50) --by squirt
+    speedFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50) --by squirt
+    speedFrame.BorderSizePixel = 1 --by squirt
+    speedFrame.Parent = contentFrame --by squirt
+--by squirt
+    speedBar = Instance.new("Frame") --by squirt
+    speedBar.Size = UDim2.new(0, 0, 1, 0) --by squirt
+    speedBar.BackgroundColor3 = Color3.fromRGB(0, 255, 255) --by squirt
+    speedBar.BorderSizePixel = 0 --by squirt
+    speedBar.Parent = speedFrame --by squirt
+--by squirt
+    speedText = Instance.new("TextLabel") --by squirt
+    speedText.Size = UDim2.new(1, -10, 0, 15) --by squirt
+    speedText.Position = UDim2.new(0, 5, 0, 70) --by squirt
+    speedText.BackgroundTransparency = 1 --by squirt
+    speedText.Text = "Speed: 0.0" --by squirt
+    speedText.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    speedText.Font = Enum.Font.Gotham --by squirt
+    speedText.TextSize = 12 --by squirt
+    speedText.TextXAlignment = Enum.TextXAlignment.Left --by squirt
+    speedText.Parent = contentFrame --by squirt
+--by squirt
+    -- Jump --by squirt
+    local jumpLabel = Instance.new("TextLabel") --by squirt
+    jumpLabel.Size = UDim2.new(0, 50, 0, 15) --by squirt
+    jumpLabel.Position = UDim2.new(0, 5, 0, 95) --by squirt
+    jumpLabel.BackgroundTransparency = 1 --by squirt
+    jumpLabel.Text = "Jump" --by squirt
+    jumpLabel.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    jumpLabel.Font = Enum.Font.Gotham --by squirt
+    jumpLabel.TextSize = 12 --by squirt
+    jumpLabel.TextXAlignment = Enum.TextXAlignment.Left --by squirt
+    jumpLabel.Parent = contentFrame --by squirt
+--by squirt
+    jumpValueText = Instance.new("TextLabel") --by squirt
+    jumpValueText.Size = UDim2.new(0, 50, 0, 15) --by squirt
+    jumpValueText.Position = UDim2.new(1, -55, 0, 95) --by squirt
+    jumpValueText.BackgroundTransparency = 1 --by squirt
+    jumpValueText.Text = tostring(math.floor(Settings.JumpPower)) --by squirt
+    jumpValueText.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    jumpValueText.Font = Enum.Font.Gotham --by squirt
+    jumpValueText.TextSize = 12 --by squirt
+    jumpValueText.TextXAlignment = Enum.TextXAlignment.Right --by squirt
+    jumpValueText.Parent = contentFrame --by squirt
+--by squirt
+    local jumpSliderBg = Instance.new("Frame") --by squirt
+    jumpSliderBg.Size = UDim2.new(1, -20, 0, 5) --by squirt
+    jumpSliderBg.Position = UDim2.new(0, 10, 0, 115) --by squirt
+    jumpSliderBg.BackgroundColor3 = Color3.fromRGB(80, 80, 80) --by squirt
+    jumpSliderBg.BorderSizePixel = 0 --by squirt
+    jumpSliderBg.Parent = contentFrame --by squirt
+--by squirt
+    jumpHandle = Instance.new("TextButton") --by squirt
+    jumpHandle.Size = UDim2.new(0, 15, 0, 15) --by squirt
+    jumpHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255) --by squirt
+    jumpHandle.Text = "" --by squirt
+    jumpHandle.BorderSizePixel = 1 --by squirt
+    jumpHandle.BorderColor3 = Color3.new(0, 0, 0) --by squirt
+    jumpHandle.Parent = jumpSliderBg --by squirt
+    jumpHandle.AutoButtonColor = false --by squirt
+--by squirt
+    -- Max speed --by squirt
+    local maxLabel = Instance.new("TextLabel") --by squirt
+    maxLabel.Size = UDim2.new(0, 50, 0, 15) --by squirt
+    maxLabel.Position = UDim2.new(0, 5, 0, 130) --by squirt
+    maxLabel.BackgroundTransparency = 1 --by squirt
+    maxLabel.Text = "Max speed" --by squirt
+    maxLabel.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    maxLabel.Font = Enum.Font.Gotham --by squirt
+    maxLabel.TextSize = 12 --by squirt
+    maxLabel.TextXAlignment = Enum.TextXAlignment.Left --by squirt
+    maxLabel.Parent = contentFrame --by squirt
+--by squirt
+    maxValueText = Instance.new("TextLabel") --by squirt
+    maxValueText.Size = UDim2.new(0, 50, 0, 15) --by squirt
+    maxValueText.Position = UDim2.new(1, -55, 0, 130) --by squirt
+    maxValueText.BackgroundTransparency = 1 --by squirt
+    maxValueText.Text = tostring(math.floor(Settings.MaxSpeed)) --by squirt
+    maxValueText.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    maxValueText.Font = Enum.Font.Gotham --by squirt
+    maxValueText.TextSize = 12 --by squirt
+    maxValueText.TextXAlignment = Enum.TextXAlignment.Right --by squirt
+    maxValueText.Parent = contentFrame --by squirt
+--by squirt
+    local maxSliderBg = Instance.new("Frame") --by squirt
+    maxSliderBg.Size = UDim2.new(1, -20, 0, 5) --by squirt
+    maxSliderBg.Position = UDim2.new(0, 10, 0, 150) --by squirt
+    maxSliderBg.BackgroundColor3 = Color3.fromRGB(80, 80, 80) --by squirt
+    maxSliderBg.BorderSizePixel = 0 --by squirt
+    maxSliderBg.Parent = contentFrame --by squirt
+--by squirt
+    maxHandle = Instance.new("TextButton") --by squirt
+    maxHandle.Size = UDim2.new(0, 15, 0, 15) --by squirt
+    maxHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255) --by squirt
+    maxHandle.Text = "" --by squirt
+    maxHandle.BorderSizePixel = 1 --by squirt
+    maxHandle.BorderColor3 = Color3.new(0, 0, 0) --by squirt
+    maxHandle.Parent = maxSliderBg --by squirt
+    maxHandle.AutoButtonColor = false --by squirt
+--by squirt
+    -- Boost --by squirt
+    local accelLabel = Instance.new("TextLabel") --by squirt
+    accelLabel.Size = UDim2.new(0, 50, 0, 15) --by squirt
+    accelLabel.Position = UDim2.new(0, 5, 0, 165) --by squirt
+    accelLabel.BackgroundTransparency = 1 --by squirt
+    accelLabel.Text = "boost" --by squirt
+    accelLabel.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    accelLabel.Font = Enum.Font.Gotham --by squirt
+    accelLabel.TextSize = 12 --by squirt
+    accelLabel.TextXAlignment = Enum.TextXAlignment.Left --by squirt
+    accelLabel.Parent = contentFrame --by squirt
+--by squirt
+    accelValueText = Instance.new("TextLabel") --by squirt
+    accelValueText.Size = UDim2.new(0, 50, 0, 15) --by squirt
+    accelValueText.Position = UDim2.new(1, -55, 0, 165) --by squirt
+    accelValueText.BackgroundTransparency = 1 --by squirt
+    accelValueText.Text = tostring(math.floor(Settings.SpeedIncrease)) --by squirt
+    accelValueText.TextColor3 = Color3.new(1, 1, 1) --by squirt
+    accelValueText.Font = Enum.Font.Gotham --by squirt
+    accelValueText.TextSize = 12 --by squirt
+    accelValueText.TextXAlignment = Enum.TextXAlignment.Right --by squirt
+    accelValueText.Parent = contentFrame --by squirt
+--by squirt
+    local accelSliderBg = Instance.new("Frame") --by squirt
+    accelSliderBg.Size = UDim2.new(1, -20, 0, 5) --by squirt
+    accelSliderBg.Position = UDim2.new(0, 10, 0, 185) --by squirt
+    accelSliderBg.BackgroundColor3 = Color3.fromRGB(80, 80, 80) --by squirt
+    accelSliderBg.BorderSizePixel = 0 --by squirt
+    accelSliderBg.Parent = contentFrame --by squirt
+--by squirt
+    accelHandle = Instance.new("TextButton") --by squirt
+    accelHandle.Size = UDim2.new(0, 15, 0, 15) --by squirt
+    accelHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255) --by squirt
+    accelHandle.Text = "" --by squirt
+    accelHandle.BorderSizePixel = 1 --by squirt
+    accelHandle.BorderColor3 = Color3.new(0, 0, 0) --by squirt
+    accelHandle.Parent = accelSliderBg --by squirt
+    accelHandle.AutoButtonColor = false --by squirt
+--by squirt
+    setJumpPower(Settings.JumpPower) --by squirt
+    setMaxSpeed(Settings.MaxSpeed) --by squirt
+    setSpeedIncrease(Settings.SpeedIncrease) --by squirt
+--by squirt
+    -- Drag title bar --by squirt
+    local frameDragging = false --by squirt
+    local frameDragStart --by squirt
+    local frameStartPos --by squirt
+--by squirt
+    titleBar.InputBegan:Connect(function(input) --by squirt
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then --by squirt
+            frameDragging = true --by squirt
+            frameDragStart = Vector2.new(input.Position.X, input.Position.Y) --by squirt
+            frameStartPos = mainFrame.Position --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    titleBar.InputEnded:Connect(function(input) --by squirt
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then --by squirt
+            frameDragging = false --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    UIS.InputChanged:Connect(function(input, gameProcessed) --by squirt
+        if frameDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then --by squirt
+            local delta = Vector2.new(input.Position.X, input.Position.Y) - frameDragStart --by squirt
+            mainFrame.Position = UDim2.new( --by squirt
+                frameStartPos.X.Scale, --by squirt
+                frameStartPos.X.Offset + delta.X, --by squirt
+                frameStartPos.Y.Scale, --by squirt
+                frameStartPos.Y.Offset + delta.Y --by squirt
+            ) --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    collapseButton.MouseButton1Click:Connect(toggleCollapse) --by squirt
+--by squirt
+    -- BHop button click --by squirt
+    button.InputBegan:Connect(function(input) --by squirt
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then --by squirt
+            touchStartPos = Vector2.new(input.Position.X, input.Position.Y) --by squirt
+            dragging = false --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    button.InputChanged:Connect(function(input) --by squirt
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then --by squirt
+            if touchStartPos and not dragging then --by squirt
+                local delta = Vector2.new(input.Position.X, input.Position.Y) - touchStartPos --by squirt
+                if delta.Magnitude >= dragThreshold then --by squirt
+                    dragging = true --by squirt
+                end --by squirt
+            end --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    button.InputEnded:Connect(function(input) --by squirt
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then --by squirt
+            if not dragging then --by squirt
+                toggleBHop() --by squirt
+            end --by squirt
+            touchStartPos = nil --by squirt
+            dragging = false --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    -- Sliders --by squirt
+    local function startSlider(input, sliderType, startVal) --by squirt
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then --by squirt
+            sliderDragging = true --by squirt
+            currentSlider = sliderType --by squirt
+            sliderStartPos = Vector2.new(input.Position.X, input.Position.Y) --by squirt
+            sliderStartValue = startVal --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    jumpHandle.InputBegan:Connect(function(input) --by squirt
+        startSlider(input, "jump", Settings.JumpPower) --by squirt
+    end) --by squirt
+    jumpHandle.InputEnded:Connect(function() --by squirt
+        sliderDragging = false --by squirt
+        currentSlider = nil --by squirt
+    end) --by squirt
+--by squirt
+    maxHandle.InputBegan:Connect(function(input) --by squirt
+        startSlider(input, "max speed", Settings.MaxSpeed) --by squirt
+    end) --by squirt
+    maxHandle.InputEnded:Connect(function() --by squirt
+        sliderDragging = false --by squirt
+        currentSlider = nil --by squirt
+    end) --by squirt
+--by squirt
+    accelHandle.InputBegan:Connect(function(input) --by squirt
+        startSlider(input, "boost", Settings.SpeedIncrease) --by squirt
+    end) --by squirt
+    accelHandle.InputEnded:Connect(function() --by squirt
+        sliderDragging = false --by squirt
+        currentSlider = nil --by squirt
+    end) --by squirt
+--by squirt
+    UIS.InputChanged:Connect(function(input) --by squirt
+        if sliderDragging and currentSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then --by squirt
+            local delta = Vector2.new(input.Position.X, input.Position.Y) - sliderStartPos --by squirt
+            local sliderBg --by squirt
+            local minVal, maxVal --by squirt
+            if currentSlider == "jump" then --by squirt
+                sliderBg = jumpSliderBg --by squirt
+                minVal = Settings.MinJumpPower --by squirt
+                maxVal = Settings.MaxJumpPower --by squirt
+            elseif currentSlider == "max speed" then --by squirt
+                sliderBg = maxSliderBg --by squirt
+                minVal = Settings.MinMaxSpeed --by squirt
+                maxVal = Settings.MaxMaxSpeed --by squirt
+            else --by squirt
+                sliderBg = accelSliderBg --by squirt
+                minVal = Settings.MinSpeedIncrease --by squirt
+                maxVal = Settings.MaxSpeedIncrease --by squirt
+            end --by squirt
+            local sliderWidth = sliderBg.AbsoluteSize.X --by squirt
+            if sliderWidth > 0 then --by squirt
+                local percent = (sliderStartValue - minVal) / (maxVal - minVal) + delta.X / sliderWidth --by squirt
+                percent = math.clamp(percent, 0, 1) --by squirt
+                local newValue = minVal + percent * (maxVal - minVal) --by squirt
+                if currentSlider == "jump" then --by squirt
+                    setJumpPower(newValue) --by squirt
+                elseif currentSlider == "max speed" then --by squirt
+                    setMaxSpeed(newValue) --by squirt
+                else --by squirt
+                    setSpeedIncrease(newValue) --by squirt
+                end --by squirt
+            end --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    print("GUI BHop создан") --by squirt
+end --by squirt
+--by squirt
+-- ========== Shiftlock (отдельная кнопка) ========== --by squirt
+--by squirt
+local function createShiftlockButton() --by squirt
+    -- Создаём ScreenGui для шифт-лока (в PlayerGui, чтобы работало везде) --by squirt
+    local ShiftlockGui = Instance.new("ScreenGui") --by squirt
+    ShiftlockGui.Name = "ShiftlockButton" --by squirt
+    ShiftlockGui.Parent = Player:WaitForChild("PlayerGui") --by squirt
+    ShiftlockGui.ResetOnSpawn = false --by squirt
+    ShiftlockGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling --by squirt
+    ShiftlockGui.DisplayOrder = 2000  -- выше чем меню BHop --by squirt
+--by squirt
+    -- Кнопка --by squirt
+    local ImageButton = Instance.new("ImageButton") --by squirt
+    ImageButton.Name = "ShiftlockIcon" --by squirt
+    ImageButton.Parent = ShiftlockGui --by squirt
+    ImageButton.Active = true --by squirt
+    ImageButton.Draggable = true  -- можно перетаскивать --by squirt
+    ImageButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) --by squirt
+    ImageButton.BackgroundTransparency = 1.000 --by squirt
+    ImageButton.Position = UDim2.new(0.92, 0, 0.55, 0)   -- справа, по центру --by squirt
+    ImageButton.Size = UDim2.new(0, 60, 0, 60)          -- размер можно подогнать --by squirt
+    ImageButton.SizeConstraint = Enum.SizeConstraint.RelativeXX --by squirt
+    ImageButton.Image = "http://www.roblox.com/asset/?id=182223762"  -- иконка замка --by squirt
+--by squirt
+    -- ========== Логика шифт-лока (первый скрипт) ========== --by squirt
+    local MobileCameraFramework = {} --by squirt
+    local players = game:GetService("Players") --by squirt
+    local runservice = game:GetService("RunService") --by squirt
+    local CAS = game:GetService("ContextActionService") --by squirt
+    local player = players.LocalPlayer --by squirt
+    local character = player.Character or player.CharacterAdded:Wait() --by squirt
+    local root = character:WaitForChild("HumanoidRootPart") --by squirt
+    local humanoid = character.Humanoid --by squirt
+    local camera = workspace.CurrentCamera --by squirt
+    local button = ImageButton --by squirt
+--by squirt
+    -- Видимость только на мобилках (можно убрать, если нужно) --by squirt
+    local uis = game:GetService("UserInputService") --by squirt
+    local ismobile = uis.TouchEnabled --by squirt
+    button.Visible = ismobile --by squirt
+--by squirt
+    local states = { --by squirt
+        OFF = "rbxasset://textures/ui/mouseLock_off@2x.png", --by squirt
+        ON = "rbxasset://textures/ui/mouseLock_on@2x.png" --by squirt
+    } --by squirt
+    local MAX_LENGTH = 900000 --by squirt
+    local active = false --by squirt
+    local ENABLED_OFFSET = CFrame.new(1.7, 0, 0) --by squirt
+    local DISABLED_OFFSET = CFrame.new(-1.7, 0, 0) --by squirt
+    local rootPos = Vector3.new(0,0,0) --by squirt
+--by squirt
+    local function UpdatePos() --by squirt
+        if player.Character and player.Character:FindFirstChildOfClass"Humanoid" and player.Character:FindFirstChildOfClass"Humanoid".RootPart then --by squirt
+            rootPos = player.Character:FindFirstChildOfClass"Humanoid".RootPart.Position --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    local function UpdateImage(STATE) --by squirt
+        button.Image = states[STATE] --by squirt
+    end --by squirt
+--by squirt
+    local function UpdateAutoRotate(BOOL) --by squirt
+        if player.Character and player.Character:FindFirstChildOfClass"Humanoid" then --by squirt
+            player.Character:FindFirstChildOfClass"Humanoid".AutoRotate = BOOL --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    local function GetUpdatedCameraCFrame() --by squirt
+        if workspace.CurrentCamera then --by squirt
+            return CFrame.new(rootPos, Vector3.new(workspace.CurrentCamera.CFrame.LookVector.X * MAX_LENGTH, rootPos.Y, workspace.CurrentCamera.CFrame.LookVector.Z * MAX_LENGTH)) --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    local function EnableShiftlock() --by squirt
+        UpdatePos() --by squirt
+        UpdateAutoRotate(false) --by squirt
+        UpdateImage("ON") --by squirt
+        if player.Character and player.Character:FindFirstChildOfClass"Humanoid" and player.Character:FindFirstChildOfClass"Humanoid".RootPart then --by squirt
+            player.Character:FindFirstChildOfClass"Humanoid".RootPart.CFrame = GetUpdatedCameraCFrame() --by squirt
+        end --by squirt
+        if workspace.CurrentCamera then --by squirt
+            workspace.CurrentCamera.CFrame = camera.CFrame * ENABLED_OFFSET --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    local function DisableShiftlock() --by squirt
+        UpdatePos() --by squirt
+        UpdateAutoRotate(true) --by squirt
+        UpdateImage("OFF") --by squirt
+        if workspace.CurrentCamera then --by squirt
+            workspace.CurrentCamera.CFrame = camera.CFrame * DISABLED_OFFSET --by squirt
+        end --by squirt
+        pcall(function() --by squirt
+            if active then --by squirt
+                active:Disconnect() --by squirt
+                active = nil --by squirt
+            end --by squirt
+        end) --by squirt
+    end --by squirt
+--by squirt
+    UpdateImage("OFF") --by squirt
+    active = false --by squirt
+--by squirt
+    function ShiftLock() --by squirt
+        if not active then --by squirt
+            active = runservice.RenderStepped:Connect(function() --by squirt
+                EnableShiftlock() --by squirt
+            end) --by squirt
+        else --by squirt
+            DisableShiftlock() --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    -- Привязка к кнопке --by squirt
+    button.MouseButton1Click:Connect(ShiftLock) --by squirt
+--by squirt
+    -- ========== Второй скрипт (контроллер) ========== --by squirt
+    -- (Адаптирован, чтобы не конфликтовать) --by squirt
+    local Players = game:GetService("Players") --by squirt
+    local UserInputService = game:GetService("UserInputService") --by squirt
+    local Settings = UserSettings() --by squirt
+    local GameSettings = Settings.GameSettings --by squirt
+    local ShiftLockController = {} --by squirt
+--by squirt
+    while not Players.LocalPlayer do wait() end --by squirt
+    local LocalPlayer = Players.LocalPlayer --by squirt
+    local Mouse = LocalPlayer:GetMouse() --by squirt
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui") --by squirt
+    local IsShiftLockMode = true --by squirt
+    local IsShiftLocked = true --by squirt
+    local IsActionBound = false --by squirt
+    local IsInFirstPerson = false --by squirt
+--by squirt
+    ShiftLockController.OnShiftLockToggled = Instance.new("BindableEvent") --by squirt
+--by squirt
+    local function isShiftLockMode() --by squirt
+        return LocalPlayer.DevEnableMouseLock and GameSettings.ControlMode == Enum.ControlMode.MouseLockSwitch and LocalPlayer.DevComputerMovementMode ~= Enum.DevComputerMovementMode.ClickToMove and GameSettings.ComputerMovementMode ~= Enum.ComputerMovementMode.ClickToMove and LocalPlayer.DevComputerMovementMode ~= Enum.DevComputerMovementMode.Scriptable --by squirt
+    end --by squirt
+--by squirt
+    if not UserInputService.TouchEnabled then --by squirt
+        IsShiftLockMode = isShiftLockMode() --by squirt
+    end --by squirt
+--by squirt
+    local function onShiftLockToggled() --by squirt
+        IsShiftLocked = not IsShiftLocked --by squirt
+        ShiftLockController.OnShiftLockToggled:Fire() --by squirt
+    end --by squirt
+--by squirt
+    local initialize = function() --by squirt
+        print("Shiftlock enabled") --by squirt
+    end --by squirt
+--by squirt
+    function ShiftLockController:IsShiftLocked() --by squirt
+        return IsShiftLockMode and IsShiftLocked --by squirt
+    end --by squirt
+--by squirt
+    function ShiftLockController:SetIsInFirstPerson(isInFirstPerson) --by squirt
+        IsInFirstPerson = isInFirstPerson --by squirt
+    end --by squirt
+--by squirt
+    local function mouseLockSwitchFunc(actionName, inputState, inputObject) --by squirt
+        if IsShiftLockMode then --by squirt
+            onShiftLockToggled() --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    local function disableShiftLock() --by squirt
+        IsShiftLockMode = false --by squirt
+        Mouse.Icon = "" --by squirt
+        if InputCn then --by squirt
+            InputCn:Disconnect() --by squirt
+            InputCn = nil --by squirt
+        end --by squirt
+        IsActionBound = false --by squirt
+        ShiftLockController.OnShiftLockToggled:Fire() --by squirt
+    end --by squirt
+--by squirt
+    local onShiftInputBegan = function(inputObject, isProcessed) --by squirt
+        if isProcessed then return end --by squirt
+        if inputObject.UserInputType ~= Enum.UserInputType.Keyboard or inputObject.KeyCode == Enum.KeyCode.LeftShift or inputObject.KeyCode == Enum.KeyCode.RightShift then --by squirt
+            -- Ничего, можно добавить обработку клавиш, если нужно --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    local function enableShiftLock() --by squirt
+        IsShiftLockMode = isShiftLockMode() --by squirt
+        if IsShiftLockMode then --by squirt
+            if IsShiftLocked then --by squirt
+                ShiftLockController.OnShiftLockToggled:Fire() --by squirt
+            end --by squirt
+            if not IsActionBound then --by squirt
+                InputCn = UserInputService.InputBegan:Connect(onShiftInputBegan) --by squirt
+                IsActionBound = true --by squirt
+            end --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    GameSettings.Changed:Connect(function(property) --by squirt
+        if property == "ControlMode" then --by squirt
+            if GameSettings.ControlMode == Enum.ControlMode.MouseLockSwitch then --by squirt
+                enableShiftLock() --by squirt
+            else --by squirt
+                disableShiftLock() --by squirt
+            end --by squirt
+        elseif property == "ComputerMovementMode" then --by squirt
+            if GameSettings.ComputerMovementMode == Enum.ComputerMovementMode.ClickToMove then --by squirt
+                disableShiftLock() --by squirt
+            else --by squirt
+                enableShiftLock() --by squirt
+            end --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    LocalPlayer.Changed:Connect(function(property) --by squirt
+        if property == "DevEnableMouseLock" then --by squirt
+            if LocalPlayer.DevEnableMouseLock then --by squirt
+                enableShiftLock() --by squirt
+            else --by squirt
+                disableShiftLock() --by squirt
+            end --by squirt
+        elseif property == "DevComputerMovementMode" then --by squirt
+            if LocalPlayer.DevComputerMovementMode == Enum.DevComputerMovementMode.ClickToMove or LocalPlayer.DevComputerMovementMode == Enum.DevComputerMovementMode.Scriptable then --by squirt
+                disableShiftLock() --by squirt
+            else --by squirt
+                enableShiftLock() --by squirt
+            end --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    LocalPlayer.CharacterAdded:Connect(function(character) --by squirt
+        if not UserInputService.TouchEnabled then --by squirt
+            initialize() --by squirt
+        end --by squirt
+    end) --by squirt
+--by squirt
+    if not UserInputService.TouchEnabled then --by squirt
+        initialize() --by squirt
+        if isShiftLockMode() then --by squirt
+            InputCn = UserInputService.InputBegan:Connect(onShiftInputBegan) --by squirt
+            IsActionBound = true --by squirt
+        end --by squirt
+    end --by squirt
+--by squirt
+    enableShiftLock() --by squirt
+--by squirt
+    print("Shiftlock button created") --by squirt
+end --by squirt
+--by squirt
+-- ========== Обработка респавна ========== --by squirt
+--by squirt
+local function onCharacterAdded(newChar) --by squirt
+    Character = newChar --by squirt
+    task.wait(0.5)  -- ждём загрузки персонажа --by squirt
+    if updateCharacterReferences() then --by squirt
+        -- Сбрасываем состояние BHop --by squirt
+        if Settings.Enabled then --by squirt
+            Settings.Enabled = false --by squirt
+        end --by squirt
+        -- Восстанавливаем оригинальные параметры --by squirt
+        Humanoid.WalkSpeed = Original.WalkSpeed --by squirt
+        Humanoid.JumpPower = Original.JumpPower --by squirt
+        Settings.CurrentSpeed = Original.WalkSpeed --by squirt
+        lastPosition = RootPart.Position --by squirt
+        lastTime = tick() --by squirt
+        peakSpeed = 0 --by squirt
+--by squirt
+        -- Пересоздаём GUI (старый удалится автоматически в createGUI) --by squirt
+        createGUI() --by squirt
+        -- Также пересоздаём кнопку шифт-лока (на случай, если её GUI тоже пропал) --by squirt
+        createShiftlockButton() --by squirt
+--by squirt
+        print("Персонаж возродился, интерфейс пересоздан") --by squirt
+    end --by squirt
+end --by squirt
+--by squirt
+Player.CharacterAdded:Connect(onCharacterAdded) --by squirt
+--by squirt
+-- ========== Запуск ========== --by squirt
+--by squirt
+createGUI() --by squirt
+createShiftlockButton() --by squirt
+--by squirt
+connection = game:GetService("RunService").Heartbeat:Connect(mainLoop) --by squirt
+--by squirt
+print("Скрипт загружен. Меню BHop слева, кнопка Shiftlock справа (видна на мобилках). Интерфейс пересоздаётся после смерти.") --by squirt
